@@ -1,131 +1,144 @@
-# 🎵 Spotify Data Pipeline with Snowpipe & Snowflake on AWS
+# 🎵 Spotify Data Pipeline on AWS with Snowpipe & Snowflake
 
-An end-to-end, serverless data engineering pipeline that extracts Spotify playlist data through the Spotify Web API, stores raw data in Amazon S3, automatically transforms it using AWS Lambda, and loads curated datasets into Snowflake using Snowpipe for analytics.
+An end-to-end serverless data engineering pipeline that extracts Spotify playlist data through the Spotify Web API, processes it using AWS services, automatically ingests it into Snowflake via Snowpipe, and exposes the data for analytics in Power BI.
 
 ---
 
-## 🚀 Project Overview
+# 🚀 Overview
 
-This project demonstrates how to build a production-style ETL pipeline using AWS serverless services and Snowflake.
+This project demonstrates a modern event-driven ETL pipeline built entirely on AWS and Snowflake.
 
-The pipeline is fully automated and event-driven.
-
-### Workflow
-
-1. Amazon CloudWatch triggers the extraction Lambda daily.
-2. Lambda authenticates with the Spotify API.
-3. Raw playlist data is stored in Amazon S3.
-4. Uploading a raw JSON file triggers a second Lambda.
-5. Lambda transforms the raw JSON into analytical tables.
-6. Clean datasets are stored back into Amazon S3.
-7. Snowpipe automatically loads new files into Snowflake.
-8. Data becomes immediately available for SQL analytics and dashboards.
+The pipeline automatically extracts Spotify playlist data on a schedule, transforms the raw JSON into analytical datasets, loads the curated data into Snowflake using Snowpipe, and visualizes the results in Power BI.
 
 ---
 
 # 🏗️ Architecture
 
 <p align="center">
-<img src="images/architecture.png" width="900">
+<img src="images/architecture.png" width="1000">
 </p>
 
 ---
 
-# ⚙️ Tech Stack
+# 🔄 Pipeline Workflow
 
-| Category | Technology |
-|-----------|------------|
-| Language | Python |
-| API | Spotify Web API |
-| Cloud | AWS |
-| Storage | Amazon S3 |
-| Scheduling | Amazon CloudWatch |
-| Compute | AWS Lambda |
-| Event Trigger | Amazon S3 Object Created |
-| Data Warehouse | Snowflake |
-| Auto Ingestion | Snowpipe |
-| Analytics | SQL |
-| Version Control | Git & GitHub |
+## 1. Extract
 
----
+Amazon CloudWatch runs on a daily schedule and triggers an AWS Lambda function.
 
-# 📊 Data Pipeline
+The extraction Lambda:
 
-## Step 1 — Extract
-
-Amazon CloudWatch triggers an AWS Lambda function once per day.
-
-The Lambda function:
-
-- Authenticates with Spotify
-- Retrieves playlist information
-- Downloads track metadata
-- Saves raw JSON to Amazon S3
-
-Example:
+- Authenticates with Spotify Web API
+- Retrieves playlist metadata
+- Downloads track information
+- Stores raw JSON into Amazon S3
 
 ```
 Spotify API
-      ↓
-Lambda
-      ↓
-s3://spotify-data/raw/
+        ↓
+CloudWatch
+        ↓
+Extract Lambda
+        ↓
+Amazon S3 (Raw)
 ```
 
 ---
 
-## Step 2 — Transform
+## 2. Transform
 
-An S3 Object Created event automatically invokes a second Lambda.
+Uploading a raw JSON file to Amazon S3 generates an Object Created event.
+
+The event is sent to Amazon SQS, which provides a reliable event queue.
+
+Amazon EventBridge orchestrates the transformation workflow and invokes the transformation Lambda.
 
 The transformation Lambda:
 
 - Reads raw JSON
-- Cleans nested structures
-- Removes unnecessary fields
-- Creates analytical datasets
+- Flattens nested Spotify objects
+- Cleans and validates data
+- Creates analytical tables
 
-Output tables include:
+Output datasets include:
 
 - Albums
 - Artists
 - Songs
 
-Example:
+The transformed files are written back to Amazon S3.
 
 ```
-Raw JSON
-      ↓
-Lambda
-      ↓
-Album.csv
-Artist.csv
-Song.csv
-```
-
-Saved to
-
-```
-s3://spotify-data/transformed/
+Amazon S3 (Raw)
+        ↓
+Amazon SQS
+        ↓
+Amazon EventBridge
+        ↓
+Transform Lambda
+        ↓
+Amazon S3 (Transformed)
 ```
 
 ---
 
-## Step 3 — Load
+## 3. Load
 
 Snowpipe continuously monitors the transformed S3 bucket.
 
 Whenever a new file arrives:
 
-- Snowpipe automatically loads data
-- No manual COPY command required
-- Data becomes available inside Snowflake
+- Snowpipe automatically ingests data
+- Data is loaded into Snowflake
+- No manual COPY commands are required
+
+```
+Amazon S3
+      ↓
+Snowpipe
+      ↓
+Snowflake
+```
 
 ---
 
-# 📋 Data Model
+## 4. Analytics
 
-### Album Table
+The curated Snowflake tables are connected directly to Power BI.
+
+Power BI dashboards provide insights such as:
+
+- Most popular artists
+- Most popular albums
+- Playlist trends
+- Release year analysis
+- Track popularity
+- Explicit vs Non-explicit songs
+
+---
+
+# ⚙️ Technologies
+
+| Category | Technology |
+|------------|----------------|
+| Language | Python |
+| API | Spotify Web API |
+| Cloud | AWS |
+| Scheduler | Amazon CloudWatch |
+| Compute | AWS Lambda |
+| Queue | Amazon SQS |
+| Orchestration | Amazon EventBridge |
+| Storage | Amazon S3 |
+| Data Warehouse | Snowflake |
+| Auto Loading | Snowpipe |
+| Visualization | Power BI |
+| Version Control | Git & GitHub |
+
+---
+
+# 🗂️ Data Model
+
+## Album
 
 | Column |
 |----------|
@@ -133,11 +146,11 @@ Whenever a new file arrives:
 | album_name |
 | release_date |
 | total_tracks |
-| url |
+| external_url |
 
 ---
 
-### Artist Table
+## Artist
 
 | Column |
 |----------|
@@ -147,7 +160,7 @@ Whenever a new file arrives:
 
 ---
 
-### Song Table
+## Song
 
 | Column |
 |----------|
@@ -161,39 +174,46 @@ Whenever a new file arrives:
 
 ---
 
-# 🔄 Event Driven Workflow
-
-```
-CloudWatch
-      ↓
-Extract Lambda
-      ↓
-Raw JSON
-      ↓
-Amazon S3
-      ↓
-S3 Trigger
-      ↓
-Transform Lambda
-      ↓
-Amazon S3 (Transformed)
-      ↓
-Snowpipe
-      ↓
-Snowflake
-```
-
----
-
-# 🔒 Environment Variables
+# 🔐 Environment Variables
 
 Create a `.env` file.
 
-```
+```env
 SPOTIPY_CLIENT_ID=YOUR_CLIENT_ID
 SPOTIPY_CLIENT_SECRET=YOUR_CLIENT_SECRET
 REDIRECT_URI=http://127.0.0.1:9090/callback
 ```
+
+---
+
+# ▶️ Running the Project
+
+Clone the repository
+
+```bash
+git clone https://github.com/jasonbo9118/Spotify-Data-Pipeline---Snowpipe-and-Snowflake-on-AWS.git
+```
+
+Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+Run locally
+
+```bash
+python main.py
+```
+
+Deploy AWS Lambda functions and configure:
+
+- CloudWatch Schedule
+- Amazon S3
+- Amazon SQS
+- EventBridge
+- Snowpipe
+- Snowflake
 
 ---
 
@@ -202,17 +222,34 @@ REDIRECT_URI=http://127.0.0.1:9090/callback
 - Python
 - REST APIs
 - JSON Processing
-- ETL Pipeline Design
+- ETL Design
 - Event-Driven Architecture
+- Serverless Computing
 - AWS Lambda
+- Amazon CloudWatch
 - Amazon S3
-- CloudWatch Events
-- Snowflake
+- Amazon SQS
+- Amazon EventBridge
 - Snowpipe
+- Snowflake
 - SQL
-- Data Modeling
+- Power BI
 - Git
 - GitHub
+
+---
+
+# 🚀 Future Improvements
+
+- Incremental loading
+- Change Data Capture (CDC)
+- Data quality validation
+- CloudWatch logging and monitoring
+- Retry and dead-letter queues
+- Infrastructure as Code (Terraform)
+- CI/CD with GitHub Actions
+- Unit and integration testing
+- Cost optimization
 
 ---
 
@@ -222,4 +259,4 @@ REDIRECT_URI=http://127.0.0.1:9090/callback
 
 Data Engineering Portfolio Project
 
-Built using Python, AWS, Snowflake, and the Spotify Web API.
+Built with Python, AWS, Snowflake, and the Spotify Web API.
